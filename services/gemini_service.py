@@ -37,3 +37,7 @@ def ask_gemini(prompt: str) -> str | None:
     except Exception as e:
         print(f"[GeminiService] Error: {e}")
         return None
+
+def is_available() -> bool:
+    """Returns True if the Gemini client is initialised and ready."""
+    return _client is not None
