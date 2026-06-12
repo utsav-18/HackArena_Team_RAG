@@ -23,3 +23,17 @@ def activate_corridor():
     except:
 
         return False
+def normal_mode():
+
+    try:
+
+        requests.get(
+            f"http://{NODEMCU_IP}/normal",
+            timeout=3
+        )
+
+        return True
+
+    except:
+
+        return False
