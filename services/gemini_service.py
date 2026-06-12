@@ -20,3 +20,20 @@ if _api_key:
     except Exception as _e:
         print(f"[GeminiService] Failed to initialise google.genai client: {_e}")
         _client = None
+def ask_gemini(prompt: str) -> str | None:
+    """
+    Call Gemini 2.5 Flash with the given prompt and return the raw response text.
+    Returns None on failure so the caller can handle fallback logic.
+    This function is intentionally simple — it does ONE thing: call Gemini once.
+    """
+    if not _client:
+        return None
+    try:
+        response = _client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        return response.text
+    except Exception as e:
+        print(f"[GeminiService] Error: {e}")
+        return None
