@@ -55,3 +55,78 @@ BROADCAST_ZONES = {
     "B": ["BTM Layout Water Tank Junction", "JP Nagar", "Bannerghatta Road", "Arekere", "Gottigere"],
     "C": ["Jayadeva Junction", "Bannerghatta Road", "Hulimavu", "Bilekahalli", "Akshayanagar"],
 }
+
+
+# ─── Public interface ─────────────────────────────────────────────────────────
+
+class CitizenAlertAgent:
+    """
+    Agent D — Citizen Alert Agent
+    Pure template engine. Zero AI/Gemini calls.
+    """
+
+    name = "Citizen Alert Agent"
+
+    def run(self, assessment: dict, hospital_data: dict, traffic_data: dict) -> dict:
+        """
+        Generate citizen notifications from structured agent data.
+
+        Args:
+            assessment   : EmergencyAssessmentAgent output
+            hospital_data: HospitalCoordinationAgent output
+            traffic_data : TrafficOptimizationAgent output
+
+        Returns:
+            {
+                "citizen_alert": str,       # Main dashboard notification
+                "sms_alert": str,           # Short SMS-style alert
+                "broadcast_zones": list,    # Areas that receive the alert
+                "timestamp": str,
+                "status": "success"
+            }
+        """
+        location = assessment.get("location", "Unknown")
+        severity = assessment.get("severity", "Low")
+        emergency_type = assessment.get("type", "General Emergency")
+        hospital = hospital_data.get("hospital", "Nearest Hospital")
+        junction = traffic_data.get("junction", "Emergency Junction")
+        route_id = traffic_data.get("route_id", "A")
+        corridor_required = traffic_data.get("corridor_required", False)
+
+        # Select template by emergency type (use General as fallback)
+        template = TEMPLATES.get(emergency_type, TEMPLATES["General Emergency"])
+
+        # Fill in the template
+        citizen_alert = template.format(
+            location=location,
+            junction=junction,
+            hospital=hospital,
+        )
+
+        # Add corridor status suffix
+        if not corridor_required:
+            citizen_alert = (
+                f"ℹ️ ADVISORY: Non-critical incident reported near {location}. "
+                f"No traffic disruptions expected. Emergency services are aware."
+            )
+
+        # Short SMS alert
+        sms_template = SMS_TEMPLATES.get(severity, SMS_TEMPLATES["Low"])
+        sms_alert = sms_template.format(
+            location=location,
+            junction=junction,
+            hospital=hospital,
+        )
+
+        # Affected broadcast zones
+        zones = BROADCAST_ZONES.get(route_id, ["Bengaluru"])
+
+        timestamp = datetime.now().strftime("%d %b %Y, %I:%M %p")
+
+        return {
+            "citizen_alert": citizen_alert,
+            "sms_alert": sms_alert,
+            "broadcast_zones": zones,
+            "timestamp": timestamp,
+            "status": "success",
+        }
