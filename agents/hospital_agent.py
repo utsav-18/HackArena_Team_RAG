@@ -51,3 +51,29 @@ HOSPITAL_DB = {
 }
 
 DEFAULT_HOSPITAL = "Apollo Hospital"
+
+
+# ─── Selector Logic ───────────────────────────────────────────────────────────
+
+def _match_by_location(location: str) -> str | None:
+    """
+    Priority 1: Match hospital by geographic zone keyword in location string.
+    Returns hospital name or None.
+    """
+    loc_lower = location.lower()
+    for hospital_name, info in HOSPITAL_DB.items():
+        if any(zone in loc_lower for zone in info["zones"]):
+            return hospital_name
+    return None
+
+
+def _match_by_type(emergency_type: str) -> str | None:
+    """
+    Priority 2: Match hospital by emergency type specialty.
+    Returns hospital name or None.
+    """
+    type_lower = emergency_type.lower()
+    for hospital_name, info in HOSPITAL_DB.items():
+        if any(spec in type_lower for spec in info["specialties"]):
+            return hospital_name
+    return None
