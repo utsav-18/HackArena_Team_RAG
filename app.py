@@ -666,3 +666,100 @@ with tab1:
     ic2.metric("🚗 Traffic Delay Reduced", "32%",  delta="corridor efficiency")
     ic3.metric("🎯 Emergency Priority",   "HIGH",  delta="real-time routing")
     ic4.metric("📏 Corridor Length",      "4.2 km", delta="optimized path")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 2 — SMART CITY MAP
+# ══════════════════════════════════════════════════════════════════════════════
+with tab2:
+    st.markdown("#### 🗺️ Smart City Route Visualization — Bengaluru")
+
+    # Map controls
+    map_col, legend_col = st.columns([3, 1], gap="large")
+
+    with legend_col:
+        st.markdown("#### 🗺️ Map Legend")
+        st.markdown("""
+        <div style='font-size:13px; line-height:2.2; color:#94a3b8;'>
+            🚑 &nbsp;<b style='color:#e2e8f0;'>Ambulance</b><br/>
+            🟢 &nbsp;<b style='color:#4ade80;'>Route A — Silk Board</b><br/>
+            🔵 &nbsp;<b style='color:#60a5fa;'>Route B — BTM Layout</b><br/>
+            🔴 &nbsp;<b style='color:#f87171;'>Route C — Jayadeva</b><br/>
+            🏥 &nbsp;<b style='color:#e2e8f0;'>Hospitals</b><br/>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown("""
+        <div style='font-size:12px; color:#475569;'>
+            🔗 Three emergency corridors cover major Bengaluru junctions.<br/><br/>
+            Each route is controlled by a dedicated NodeMCU traffic signal node.
+        </div>
+        """, unsafe_allow_html=True)
+
+    with map_col:
+        m = folium.Map(
+            location=[12.9150, 77.6100],
+            zoom_start=13,
+            tiles="CartoDB dark_matter",
+        )
+
+        # Ambulance origin marker
+        folium.Marker(
+            [12.9279, 77.6271],
+            popup=folium.Popup("🚑 Ambulance Origin", max_width=200),
+            tooltip="🚑 Ambulance",
+            icon=folium.Icon(color="white", icon="ambulance", prefix="fa"),
+        ).add_to(m)
+
+        # Junction markers
+        junction_data = {
+            "A": {"coords": [12.9170, 77.6231], "color": "green",
+                  "popup": "🟢 Silk Board Junction (Route A) — NodeMCU #1"},
+            "B": {"coords": [12.9116, 77.6100], "color": "blue",
+                  "popup": "🔵 BTM Layout Water Tank Junction (Route B) — NodeMCU #2"},
+            "C": {"coords": [12.9200, 77.5980], "color": "red",
+                  "popup": "🔴 Jayadeva Junction (Route C) — NodeMCU #3"},
+        }
+        for route_id, info in junction_data.items():
+            folium.Marker(
+                info["coords"],
+                popup=folium.Popup(info["popup"], max_width=220),
+                tooltip=f"Route {route_id} Junction",
+                icon=folium.Icon(color=info["color"], icon="traffic-light", prefix="fa"),
+            ).add_to(m)
+
+        # Hospital markers
+        for hosp_name, coords in HOSPITAL_COORDS.items():
+            folium.Marker(
+                coords,
+                popup=folium.Popup(f"🏥 {hosp_name}", max_width=200),
+                tooltip=f"🏥 {hosp_name}",
+                icon=folium.Icon(color="purple", icon="plus-sign"),
+            ).add_to(m)
+
+        # Emergency corridor routes
+        route_lines = {
+            "A": {
+                "points": [[12.9279, 77.6271], [12.9170, 77.6231], [12.8945, 77.5970]],
+                "color": "#00ff88",
+            },
+            "B": {
+                "points": [[12.9279, 77.6271], [12.9116, 77.6100], [12.8600, 77.5800]],
+                "color": "#38bdf8",
+            },
+            "C": {
+                "points": [[12.9279, 77.6271], [12.9200, 77.5980], [12.9204, 77.5973]],
+                "color": "#f87171",
+            },
+        }
+        for route_id, line in route_lines.items():
+            folium.PolyLine(
+                line["points"],
+                color=line["color"],
+                weight=4,
+                opacity=0.75,
+                tooltip=f"Emergency Corridor Route {route_id}",
+                dash_array="8 4",
+            ).add_to(m)
+
+        st_folium(m, width=900, height=520, returned_objects=[])
