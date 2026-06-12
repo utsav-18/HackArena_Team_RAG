@@ -1,13 +1,4 @@
-# app.py
-# Urban Guardian AI — HackArena Edition
-# Multi-Agent Agentic AI + Generative AI Emergency Response System
-# ──────────────────────────────────────────────────────────────────
-# Architecture:
-#   Orchestrator → Emergency Assessment Agent (Gemini ×1)
-#              → Hospital Coordination Agent  (rule-based)
-#              → Traffic Optimization Agent   (decision + IoT)
-#              → Citizen Alert Agent          (template)
-# ──────────────────────────────────────────────────────────────────
+#App.py
 
 import streamlit as st
 import folium
