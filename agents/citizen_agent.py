@@ -130,3 +130,14 @@ class CitizenAlertAgent:
             "timestamp": timestamp,
             "status": "success",
         }
+    
+    
+# ─── Standalone test ──────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    agent = CitizenAlertAgent()
+    result = agent.run(
+        assessment={"severity": "Critical", "type": "Cardiac Emergency", "location": "Silk Board Junction"},
+        hospital_data={"hospital": "Apollo Hospital"},
+        traffic_data={"junction": "Silk Board Junction", "route_id": "A", "corridor_required": True},
+    )
+    print(result)
