@@ -75,3 +75,70 @@ def _local_parse(text: str) -> dict:
         "type": _local_type(text),
         "location": _local_location(text),
     }
+
+
+# ─── Gemini parser ────────────────────────────────────────────────────────────
+
+def _gemini_parse(text: str) -> dict | None:
+    """
+    Call Gemini ONCE with the minimal assessment prompt.
+    Returns parsed dict on success, None on any failure.
+    """
+    if not is_available():
+        return None
+
+    prompt = EMERGENCY_ASSESSMENT_PROMPT + text
+
+    raw = ask_gemini(prompt)
+    if not raw:
+        return None
+
+    # Strip markdown code fences if present
+    clean = re.sub(r"```(?:json)?", "", raw).replace("```", "").strip()
+
+    try:
+        data = json.loads(clean)
+        # Validate required keys
+        if all(k in data for k in ("severity", "type", "location")):
+            return data
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    return None
+
+
+# ─── Public interface ─────────────────────────────────────────────────────────
+
+class EmergencyAssessmentAgent:
+    """
+    Agent A — Emergency Assessment Agent
+    Sole Gemini-powered agent in the system.
+    """
+
+    name = "Emergency Assessment Agent"
+
+    def run(self, emergency_text: str) -> dict:
+        """
+        Analyze emergency description and return structured assessment.
+
+        Returns:
+            {
+                "severity": str,
+                "type": str,
+                "location": str,
+                "gemini_used": bool,
+                "status": "success" | "fallback"
+            }
+        """
+        # Attempt Gemini (1 call, exactly once)
+        result = _gemini_parse(emergency_text)
+        gemini_used = True
+
+        if result is None:
+            # Graceful fallback to local keyword parser
+            result = _local_parse(emergency_text)
+            gemini_used = False
+
+        result["gemini_used"] = gemini_used
+        result["status"] = "success"
+        return result
