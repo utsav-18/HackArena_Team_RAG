@@ -77,3 +77,68 @@ def _match_by_type(emergency_type: str) -> str | None:
         if any(spec in type_lower for spec in info["specialties"]):
             return hospital_name
     return None
+
+
+
+# ─── Public interface ─────────────────────────────────────────────────────────
+
+class HospitalCoordinationAgent:
+    """
+    Agent B — Hospital Coordination Agent
+    Pure rule-based. Zero AI/Gemini calls.
+    """
+
+    name = "Hospital Coordination Agent"
+
+    def run(self, assessment: dict) -> dict:
+        """
+        Select best hospital based on emergency assessment.
+
+        Args:
+            assessment: Output from EmergencyAssessmentAgent
+                        { "severity": str, "type": str, "location": str }
+
+        Returns:
+            {
+                "hospital": str,
+                "hospital_contact": str,
+                "eta_minutes": int,
+                "selection_reason": str,
+                "status": "success"
+            }
+        """
+        location = assessment.get("location", "Unknown")
+        emergency_type = assessment.get("type", "General Emergency")
+
+        # Location-first, type-fallback matching
+        hospital_name = _match_by_location(location)
+        reason = "location-based match"
+
+        if not hospital_name:
+            hospital_name = _match_by_type(emergency_type)
+            reason = "emergency-type match"
+
+        if not hospital_name:
+            hospital_name = DEFAULT_HOSPITAL
+            reason = "default fallback"
+
+        info = HOSPITAL_DB[hospital_name]
+
+        return {
+            "hospital": hospital_name,
+            "hospital_contact": info["contact"],
+            "eta_minutes": info["eta_minutes"],
+            "selection_reason": reason,
+            "status": "success",
+        }
+
+
+# ─── Standalone test ──────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    agent = HospitalCoordinationAgent()
+    test_assessment = {
+        "severity": "Critical",
+        "type": "Cardiac Emergency",
+        "location": "Silk Board Junction",
+    }
+    print(agent.run(test_assessment))
