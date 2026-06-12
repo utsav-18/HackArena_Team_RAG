@@ -361,6 +361,13 @@ hr { border-color: rgba(0,255,255,0.08) !important; }
 [data-testid="stAlert"] {
     border-radius: 14px !important;
 }
+
+/* ── FOLIUM MAP ── */
+iframe[title="streamlit_folium.st_folium"] {
+    border-radius: 16px !important;
+    border: 1px solid rgba(0,255,255,0.15) !important;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -700,7 +707,7 @@ with tab2:
         m = folium.Map(
             location=[12.9150, 77.6100],
             zoom_start=13,
-            tiles="CartoDB dark_matter",
+            tiles="CartoDB positron",
         )
 
         # Ambulance origin marker
@@ -708,7 +715,7 @@ with tab2:
             [12.9279, 77.6271],
             popup=folium.Popup("🚑 Ambulance Origin", max_width=200),
             tooltip="🚑 Ambulance",
-            icon=folium.Icon(color="white", icon="ambulance", prefix="fa"),
+            icon=folium.Icon(color="red", icon="ambulance", prefix="fa"),
         ).add_to(m)
 
         # Junction markers
