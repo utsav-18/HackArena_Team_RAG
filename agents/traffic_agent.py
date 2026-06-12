@@ -190,3 +190,36 @@ class TrafficOptimizationAgent:
             "nodemcu_status": nodemcu_status,
             "status": "success",
         }
+
+
+# ─── Standalone helper functions (used by app.py for manual control) ──────────
+
+def activate_route_a() -> bool:
+    success, _ = _trigger_nodemcu("/emergencyA")
+    return success
+
+def activate_route_b() -> bool:
+    success, _ = _trigger_nodemcu("/emergencyB")
+    return success
+
+def activate_route_c() -> bool:
+    success, _ = _trigger_nodemcu("/emergencyC")
+    return success
+
+def normal_mode() -> bool:
+    success, _ = _trigger_nodemcu(NORMAL_ENDPOINT)
+    return success
+
+def get_status() -> bool:
+    success, _ = _trigger_nodemcu("/status")
+    return success
+
+
+# ─── Standalone test ──────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    agent = TrafficOptimizationAgent()
+    result = agent.run(
+        assessment={"severity": "Critical", "type": "Cardiac Emergency", "location": "Silk Board Junction"},
+        hospital_data={"hospital": "Apollo Hospital"},
+    )
+    print(result)
