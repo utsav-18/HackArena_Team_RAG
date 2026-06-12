@@ -142,3 +142,10 @@ class EmergencyAssessmentAgent:
         result["gemini_used"] = gemini_used
         result["status"] = "success"
         return result
+    
+
+# ─── Standalone test ──────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    agent = EmergencyAssessmentAgent()
+    test = "Critical cardiac patient near Silk Board Junction. Requires immediate ambulance."
+    print(agent.run(test))
