@@ -1,0 +1,40 @@
+.main {
+    background: linear-gradient(
+        135deg,
+        #050816,
+        #0f172a
+    );
+}
+
+.stApp {
+    background-color: #050816;
+    color: white;
+}
+
+.hero {
+    text-align: center;
+    padding: 20px;
+    border-radius: 20px;
+    background: linear-gradient(
+        90deg,
+        #06b6d4,
+        #2563eb
+    );
+    color: white;
+    margin-bottom: 20px;
+}
+
+.metric-card {
+    padding: 15px;
+    border-radius: 15px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+}
+
+.alert-box {
+    padding: 20px;
+    border-radius: 15px;
+    background: rgba(255,0,0,0.15);
+    border: 1px solid red;
+}
