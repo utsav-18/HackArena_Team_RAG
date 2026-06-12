@@ -363,3 +363,169 @@ hr { border-color: rgba(0,255,255,0.08) !important; }
 }
 </style>
 """, unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HERO HEADER
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("""
+<div class='hero glow'>
+    <div class='hero-badge'>⚡ Agentic AI · Smart City · IoT</div>
+    <div class='hero-title'>🚑 Urban Guardian AI</div>
+    <div class='hero-sub'>
+        Multi-Agent Emergency Response &amp; Smart Traffic Command Center · Bengaluru
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.write("")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TABS
+# ══════════════════════════════════════════════════════════════════════════════
+tab1, tab2, tab3 = st.tabs([
+    "🚨 Emergency Command",
+    "🗺️ Smart City Map",
+    "⚙️ Hardware Monitor",
+])
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 1 — EMERGENCY COMMAND
+# ══════════════════════════════════════════════════════════════════════════════
+with tab1:
+
+    # ── Input Section ─────────────────────────────────────────────────────────
+    col_input, col_arch = st.columns([3, 1], gap="large")
+
+    with col_input:
+        st.markdown("#### 🚨 Emergency Input")
+        emergency = st.text_area(
+            label="emergency_input",
+            label_visibility="collapsed",
+            height=160,
+            placeholder=(
+                "Describe the emergency in natural language...\n\n"
+                "Example: Critical cardiac patient near Silk Board Junction. "
+                "Heavy traffic congestion on Hosur Road. Ambulance needed immediately."
+            ),
+            key="emergency_text_area",
+        )
+        analyze_btn = st.button("🤖 Activate Agent Workflow", key="analyze_btn")
+
+    with col_arch:
+        st.markdown("#### 🔄 Agent Workflow")
+        st.markdown("""
+<div style='font-size:12px;'>
+<div class='workflow-step'>👤 <b>User Input</b></div>
+<div class='workflow-arrow'>↓</div>
+<div class='workflow-step'>🧩 <b>Orchestrator Agent</b></div>
+<div class='workflow-arrow'>↓</div>
+<div class='workflow-step'>🧠 <b>Emergency Agent</b> <span class='gemini-badge'>GEMINI ×1</span></div>
+<div class='workflow-arrow'>↓</div>
+<div class='workflow-step'>🏥 <b>Hospital Agent</b> <span class='ai-rule-badge'>RULE</span></div>
+<div class='workflow-arrow'>↓</div>
+<div class='workflow-step'>🚦 <b>Traffic Agent</b> <span class='ai-rule-badge'>RULE</span></div>
+<div class='workflow-arrow'>↓</div>
+<div class='workflow-step'>📢 <b>Citizen Agent</b> <span class='ai-rule-badge'>TMPL</span></div>
+<div class='workflow-arrow'>↓</div>
+<div class='workflow-step'>📡 <b>NodeMCU IoT</b></div>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Analysis Results ───────────────────────────────────────────────────────
+    if analyze_btn:
+        if not emergency.strip():
+            st.warning("⚠️ Please describe the emergency before activating the agent workflow.")
+        else:
+            # ── Run Orchestrator ───────────────────────────────────────────────
+            with st.spinner("🤖 Orchestrating AI Agents..."):
+                orchestrator = OrchestratorAgent()
+                result = orchestrator.run(emergency)
+
+            final   = result["final_data"]
+            a_status= result["agent_status"]
+            logs    = result["execution_logs"]
+            total_ms= result["total_elapsed_ms"]
+
+            st.markdown("---")
+
+            # ── Row 1: Agent Status Panel + Key Metrics ────────────────────────
+            panel_col, metrics_col = st.columns([1, 2], gap="large")
+
+            with panel_col:
+                st.markdown("#### ⚡ Agent Execution Status")
+                st.write("")
+
+                agent_order = [
+                    ("Orchestrator Agent",          "🧩", "COORD"),
+                    ("Emergency Assessment Agent",  "🧠", "GEMINI"),
+                    ("Hospital Coordination Agent", "🏥", "RULE"),
+                    ("Traffic Optimization Agent",  "🚦", "RULE"),
+                    ("Citizen Alert Agent",         "📢", "TMPL"),
+                ]
+                log_map = {l["agent"]: l for l in logs}
+
+                with st.container():
+                    for (name, icon, kind) in agent_order:
+                        # Extract agent data
+                        status = a_status.get(name, "⏳ Pending")
+                        log    = log_map.get(name, {})
+                        ms     = log.get("elapsed_ms", 0)
+
+                        # Create columns for clean alignment
+                        c1, c2, c3 = st.columns([6, 3, 2])
+                        
+                        with c1:
+                            st.markdown(f"**{icon} {name}**")
+                        
+                        with c2:
+                            if "✅" in status:
+                                st.markdown("✅ **Success**")
+                            elif "❌" in status:
+                                st.markdown("❌ **Failed**")
+                            else:
+                                st.markdown("🟡 **Running**")
+                        
+                        with c3:
+                            st.code(f"{ms} ms" if ms else "0 ms")
+
+                st.markdown("---")
+                
+                # Footer row for Gemini indicator + total time
+                gemini_note = "🔮 Gemini AI used" if final.get("gemini_used") else "🔁 Local fallback"
+                c_foot1, c_foot2 = st.columns(2)
+                c_foot1.info(gemini_note)
+                c_foot2.info(f"Total: {total_ms} ms")
+
+            with metrics_col:
+                # Severity color
+                sev = final["severity"]
+                sev_color = {
+                    "Critical": "#f87171",
+                    "High":     "#fb923c",
+                    "Medium":   "#fbbf24",
+                    "Low":      "#4ade80",
+                }.get(sev, "#94a3b8")
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("🔴 Severity",    final["severity"])
+                m2.metric("📍 Location",    final["location"])
+                m3.metric("🏥 Hospital",    final["hospital"])
+                m4.metric("🚦 Corridor",
+                          "ACTIVE" if final["corridor_required"] else "OFF")
+
+                st.write("")
+                m5, m6, m7, m8 = st.columns(4)
+                m5.metric("🚑 ETA",         f"{final['eta_minutes']} min")
+                m6.metric("🗺️ Route",       f"Route {final['route_id']}")
+                m7.metric("🏙️ Junction",    final["junction"])
+                # NodeMCU metric: Triggered / Waiting / Error
+                status_lower = final["nodemcu_status"].lower()
+                if final["nodemcu_triggered"]:
+                    nodemcu_label = "🟢 NodeMCU Online"
+                elif "error" in status_lower or "failed" in status_lower or "offline" in status_lower or "unreachable" in status_lower:
+                    nodemcu_label = "🔴 Comm Error"
+                else:
+                    nodemcu_label = "🟡 Waiting..."
+                m8.metric("📡 NodeMCU", nodemcu_label)
+
+            st.markdown("---")
