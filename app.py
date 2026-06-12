@@ -763,3 +763,121 @@ with tab2:
             ).add_to(m)
 
         st_folium(m, width=900, height=520, returned_objects=[])
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 3 — HARDWARE MONITOR
+# ══════════════════════════════════════════════════════════════════════════════
+with tab3:
+    st.markdown("#### ⚙️ NodeMCU ESP8266 Hardware Monitor")
+
+    online = get_status()
+
+    hw1, hw2, hw3 = st.columns(3)
+    hw1.metric("📡 NodeMCU",        "ONLINE"   if online else "OFFLINE")
+    hw2.metric("🚦 Traffic Corridor", "READY")
+    hw3.metric("🔴 Emergency Mode",  "STANDBY")
+
+    if online:
+        st.success("🟢 NodeMCU Connected — ESP8266 hardware link established.")
+    else:
+        st.warning(
+            "🟡 NodeMCU Offline — Set `NODEMCU_IP` in your `.env` file. "
+            "Agent workflow still fully functional without hardware."
+        )
+
+    st.markdown("---")
+    st.markdown("#### 🚦 Manual Traffic Corridor Control — Bengaluru Junctions")
+
+    mc1, mc2, mc3, mc4 = st.columns(4)
+
+    with mc1:
+        if st.button("🟢 Silk Board Jn. (A)", key="manual_a"):
+            if activate_route_a():
+                st.success("✅ Silk Board Junction Corridor Activated")
+            else:
+                st.error("❌ NodeMCU Unreachable")
+
+    with mc2:
+        if st.button("🔵 BTM Layout Jn. (B)", key="manual_b"):
+            if activate_route_b():
+                st.success("✅ BTM Layout Junction Corridor Activated")
+            else:
+                st.error("❌ NodeMCU Unreachable")
+
+    with mc3:
+        if st.button("🔴 Jayadeva Jn. (C)", key="manual_c"):
+            if activate_route_c():
+                st.success("✅ Jayadeva Junction Corridor Activated")
+            else:
+                st.error("❌ NodeMCU Unreachable")
+
+    with mc4:
+        if st.button("🔄 Normal Mode", key="manual_normal"):
+            if normal_mode():
+                st.info("🔄 Normal Traffic Mode Activated")
+            else:
+                st.error("❌ NodeMCU Unreachable")
+
+    st.markdown("---")
+    st.markdown("#### 🏗️ System Architecture")
+    st.markdown("""
+    <div class='glass'>
+    <table style='width:100%; border-collapse:collapse; font-size:13px;'>
+        <thead>
+            <tr>
+                <th style='color:#00ffff; padding:10px; text-align:left; border-bottom:1px solid rgba(0,255,255,0.15);'>Agent</th>
+                <th style='color:#00ffff; padding:10px; text-align:left; border-bottom:1px solid rgba(0,255,255,0.15);'>Type</th>
+                <th style='color:#00ffff; padding:10px; text-align:left; border-bottom:1px solid rgba(0,255,255,0.15);'>Gemini</th>
+                <th style='color:#00ffff; padding:10px; text-align:left; border-bottom:1px solid rgba(0,255,255,0.15);'>Responsibility</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style='color:#e2e8f0; padding:10px;'>🧩 Orchestrator</td>
+                <td style='color:#94a3b8; padding:10px;'>Coordinator</td>
+                <td style='color:#f87171; padding:10px;'>❌ No</td>
+                <td style='color:#94a3b8; padding:10px;'>Sequences all agents, passes JSON, aggregates output</td>
+            </tr>
+            <tr style='background:rgba(0,255,255,0.02);'>
+                <td style='color:#e2e8f0; padding:10px;'>🧠 Emergency Agent</td>
+                <td style='color:#94a3b8; padding:10px;'>Generative AI</td>
+                <td style='color:#4ade80; padding:10px;'>✅ Yes (×1)</td>
+                <td style='color:#94a3b8; padding:10px;'>NLP understanding → severity, type, location JSON</td>
+            </tr>
+            <tr>
+                <td style='color:#e2e8f0; padding:10px;'>🏥 Hospital Agent</td>
+                <td style='color:#94a3b8; padding:10px;'>Rule-Based</td>
+                <td style='color:#f87171; padding:10px;'>❌ No</td>
+                <td style='color:#94a3b8; padding:10px;'>Location + type → nearest hospital mapping</td>
+            </tr>
+            <tr style='background:rgba(0,255,255,0.02);'>
+                <td style='color:#e2e8f0; padding:10px;'>🚦 Traffic Agent</td>
+                <td style='color:#94a3b8; padding:10px;'>Decision + IoT</td>
+                <td style='color:#f87171; padding:10px;'>❌ No</td>
+                <td style='color:#94a3b8; padding:10px;'>Route A/B/C selection + NodeMCU HTTP trigger</td>
+            </tr>
+            <tr>
+                <td style='color:#e2e8f0; padding:10px;'>📢 Citizen Agent</td>
+                <td style='color:#94a3b8; padding:10px;'>Template</td>
+                <td style='color:#f87171; padding:10px;'>❌ No</td>
+                <td style='color:#94a3b8; padding:10px;'>Structured alert + SMS + broadcast zones</td>
+            </tr>
+        </tbody>
+    </table>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FOOTER
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.markdown("""
+<div style='text-align:center; padding:16px; color:#334155; font-size:12px;'>
+    <span style='color:#00ffff; font-weight:700;'>Urban Guardian AI</span> &nbsp;·&nbsp;
+    Powered by <b>Gemini 2.5 Flash</b> &nbsp;·&nbsp;
+    <b>Multi-Agent Agentic AI</b> &nbsp;·&nbsp;
+    <b>ESP8266 NodeMCU</b> &nbsp;·&nbsp;
+    <b>Bengaluru Smart City</b>
+    <br/><span style='color:#1e293b;'>Gemini called exactly once per request · All other agents are rule-based</span>
+</div>
+""", unsafe_allow_html=True)
