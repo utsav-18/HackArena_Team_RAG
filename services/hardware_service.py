@@ -23,6 +23,8 @@ def activate_corridor():
     except:
 
         return False
+
+
 def normal_mode():
 
     try:

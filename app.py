@@ -1,881 +1,637 @@
-#App.py
-
+# app.py
+# Urban Guardian AI - HackArena Edition
+from backup_ai import backup_analysis
+from typing import Optional
 import streamlit as st
-import folium
-from streamlit_folium import st_folium
+import google.generativeai as genai
 from dotenv import load_dotenv
 import os
-
+import json
+import requests
+import folium
+from streamlit_folium import st_folium
+# =========================================================
+# CONFIG
+# =========================================================
 load_dotenv()
-
-# ── Page Config ───────────────────────────────────────────────────────────────
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+NODEMCU_IP = os.getenv("NODEMCU_IP")
 st.set_page_config(
     page_title="Urban Guardian AI",
     page_icon="🚑",
-    layout="wide",
-    initial_sidebar_state="collapsed",
+    layout="wide"
 )
-
-# ── Import Agents ─────────────────────────────────────────────────────────────
-from agents.orchestrator import OrchestratorAgent
-from agents.traffic_agent import (
-    activate_route_a, activate_route_b, activate_route_c,
-    normal_mode, get_status,
-)
-
-# ── Constants ─────────────────────────────────────────────────────────────────
+# =========================================================
+# ROUTE JUNCTION MAPPING
+# Maps route_id codes to real Bengaluru junction names.
+# =========================================================
 ROUTE_JUNCTION = {
     "A": "Silk Board Junction",
     "B": "BTM Layout Water Tank Junction",
-    "C": "Jayadeva Junction",
+    "C": "Jayadeva Junction"
 }
-
-ROUTE_COLORS = {"A": "green", "B": "blue", "C": "red"}
-
-JUNCTION_COORDS = {
-    "A": [12.9170, 77.6231],
-    "B": [12.9116, 77.6100],
-    "C": [12.9200, 77.5980],
-}
-
-HOSPITAL_COORDS = {
-    "Apollo Hospital":                          [12.8945, 77.5970],
-    "Narayana Health City":                     [12.8600, 77.5800],
-    "Jayadeva Institute of Cardiovascular Sciences": [12.9204, 77.5973],
-    "Victoria Hospital":                        [12.9716, 77.5716],
-    "Manipal Hospital":                         [12.9592, 77.6470],
-}
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PREMIUM CSS — Futuristic Dark Theme with Agent Status Styling
-# ══════════════════════════════════════════════════════════════════════════════
+# =========================================================
+# FUTURISTIC CSS
+# =========================================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
-
-* { font-family: 'Inter', sans-serif; }
-
-.stApp {
-    background: linear-gradient(135deg, #020617 0%, #0f172a 40%, #0a0f1e 70%, #020617 100%);
-    min-height: 100vh;
+.stApp{
+    background:
+    linear-gradient(
+        135deg,
+        #020617,
+        #0f172a,
+        #020617
+    );
 }
-
-/* Hide Streamlit chrome */
-#MainMenu { visibility: hidden; }
-footer    { visibility: hidden; }
-header    { visibility: hidden; }
-
-/* ── HERO ── */
-.hero {
-    text-align: center;
-    padding: 36px 20px 28px;
-    border-radius: 28px;
-    background: linear-gradient(135deg, rgba(0,255,255,0.07) 0%, rgba(37,99,235,0.10) 100%);
-    border: 1px solid rgba(0,255,255,0.20);
-    box-shadow: 0 0 60px rgba(0,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.05);
-    margin-bottom: 8px;
+/* Hide Streamlit Branding */
+#MainMenu {visibility:hidden;}
+footer {visibility:hidden;}
+header {visibility:hidden;}
+/* HERO */
+.hero{
+    text-align:center;
+    padding:30px;
+    border-radius:25px;
+    background:
+    linear-gradient(
+        135deg,
+        rgba(0,255,255,0.12),
+        rgba(37,99,235,0.12)
+    );
+    border:
+    1px solid rgba(0,255,255,0.25);
+    box-shadow:
+    0px 0px 35px rgba(0,255,255,0.15);
 }
-.hero-title {
-    font-size: 54px;
-    font-weight: 800;
-    background: linear-gradient(90deg, #00ffff, #38bdf8, #818cf8);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    letter-spacing: -1px;
+.hero-title{
+    font-size:58px;
+    font-weight:800;
+    background:
+    linear-gradient(
+        90deg,
+        #00ffff,
+        #38bdf8,
+        #60a5fa
+    );
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
 }
-.hero-badge {
-    display: inline-block;
-    background: rgba(0,255,255,0.10);
-    border: 1px solid rgba(0,255,255,0.30);
-    color: #00ffff;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    padding: 4px 14px;
-    border-radius: 20px;
-    margin-bottom: 10px;
+.hero-sub{
+    color:#94a3b8;
+    font-size:18px;
 }
-.hero-sub {
-    color: #94a3b8;
-    font-size: 17px;
-    margin-top: 6px;
-}
-
-/* ── METRICS ── */
+/* METRICS */
 [data-testid="metric-container"] {
-    background: rgba(15,23,42,0.85);
-    border: 1px solid rgba(0,255,255,0.12);
-    border-radius: 20px;
-    padding: 18px;
-    box-shadow: 0 0 20px rgba(0,255,255,0.05);
-    transition: all 0.3s ease;
+    background:
+    rgba(15,23,42,0.8);
+    border:
+    1px solid rgba(0,255,255,0.15);
+    border-radius:20px;
+    padding:15px;
+    box-shadow:
+    0px 0px 20px rgba(0,255,255,0.08);
 }
 [data-testid="metric-container"]:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 0 35px rgba(0,255,255,0.20);
-    border-color: rgba(0,255,255,0.35);
+    transform:translateY(-5px);
+    transition:0.3s ease;
+    box-shadow:
+    0px 0px 30px rgba(0,255,255,0.3);
 }
-
-/* ── BUTTONS ── */
+/* BUTTON */
 .stButton > button {
-    width: 100%;
-    height: 52px;
-    border: none;
-    border-radius: 14px;
-    color: white;
-    font-size: 16px;
-    font-weight: 700;
-    background: linear-gradient(90deg, #06b6d4, #2563eb);
-    box-shadow: 0 0 25px rgba(37,99,235,0.30);
-    transition: all 0.25s ease;
-    letter-spacing: 0.3px;
+    width:100%;
+    height:55px;
+    border:none;
+    border-radius:15px;
+    color:white;
+    font-size:18px;
+    font-weight:bold;
+    background:
+    linear-gradient(
+        90deg,
+        #06b6d4,
+        #2563eb
+    );
+    box-shadow:
+    0px 0px 25px rgba(37,99,235,0.35);
 }
 .stButton > button:hover {
-    transform: scale(1.03);
-    box-shadow: 0 0 40px rgba(0,255,255,0.45);
+    transform:scale(1.02);
+    transition:0.3s;
+    box-shadow:
+    0px 0px 35px rgba(0,255,255,0.5);
 }
-
-/* ── TEXT AREA ── */
+/* TEXT AREA */
 textarea {
-    background: rgba(15,23,42,0.85) !important;
-    color: #e2e8f0 !important;
-    border: 1px solid rgba(0,255,255,0.18) !important;
-    border-radius: 16px !important;
-    font-size: 15px !important;
-    transition: border-color 0.3s;
+    background:
+    rgba(15,23,42,0.8) !important;
+    color:white !important;
+    border:
+    1px solid rgba(0,255,255,0.2) !important;
+    border-radius:15px !important;
 }
-textarea:focus { border-color: rgba(0,255,255,0.50) !important; }
-
-/* ── GLASS CARD ── */
-.glass {
-    background: rgba(255,255,255,0.03);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 22px;
-    padding: 22px;
+/* GLASS CARD */
+.glass{
+    background:
+    rgba(255,255,255,0.04);
+    backdrop-filter:
+    blur(15px);
+    border:
+    1px solid rgba(255,255,255,0.08);
+    border-radius:20px;
+    padding:20px;
 }
-
-/* ── AGENT STATUS PANEL ── */
-.agent-panel {
-    background: rgba(15,23,42,0.90);
-    border: 1px solid rgba(0,255,255,0.15);
-    border-radius: 22px;
-    padding: 20px;
-    margin-bottom: 6px;
+/* GLOW */
+@keyframes pulse {
+    0%{
+        box-shadow:
+        0px 0px 15px rgba(0,255,255,0.1);
+    }
+    50%{
+        box-shadow:
+        0px 0px 35px rgba(0,255,255,0.35);
+    }
+    100%{
+        box-shadow:
+        0px 0px 15px rgba(0,255,255,0.1);
+    }
 }
-.agent-panel-title {
-    color: #00ffff;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.agent-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    border-radius: 12px;
-    margin-bottom: 8px;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.05);
-    transition: background 0.2s;
-}
-.agent-row:hover { background: rgba(0,255,255,0.04); }
-.agent-name {
-    color: #cbd5e1;
-    font-size: 13px;
-    font-weight: 600;
-}
-.agent-badge-success {
-    background: rgba(34,197,94,0.15);
-    color: #4ade80;
-    border: 1px solid rgba(34,197,94,0.30);
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 20px;
-    letter-spacing: 0.5px;
-}
-.agent-badge-pending {
-    background: rgba(234,179,8,0.15);
-    color: #fbbf24;
-    border: 1px solid rgba(234,179,8,0.30);
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 20px;
-}
-.agent-badge-fail {
-    background: rgba(239,68,68,0.15);
-    color: #f87171;
-    border: 1px solid rgba(239,68,68,0.30);
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 20px;
-}
-.agent-ms {
-    color: #475569;
-    font-size: 11px;
-    font-family: 'JetBrains Mono', monospace;
-    margin-left: 8px;
-}
-.gemini-badge {
-    background: linear-gradient(90deg, rgba(0,255,255,0.15), rgba(99,102,241,0.15));
-    border: 1px solid rgba(0,255,255,0.30);
-    color: #a5f3fc;
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 10px;
-    letter-spacing: 1px;
-}
-.ai-rule-badge {
-    background: rgba(100,116,139,0.15);
-    border: 1px solid rgba(100,116,139,0.20);
-    color: #64748b;
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 10px;
-}
-
-/* ── SEVERITY CHIPS ── */
-.chip-critical { color: #f87171; font-weight: 700; }
-.chip-high     { color: #fb923c; font-weight: 700; }
-.chip-medium   { color: #fbbf24; font-weight: 700; }
-.chip-low      { color: #4ade80; font-weight: 700; }
-
-/* ── WORKFLOW DIAGRAM ── */
-.workflow-step {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    background: rgba(255,255,255,0.025);
-    border-left: 3px solid rgba(0,255,255,0.30);
-    border-radius: 0 10px 10px 0;
-    margin-bottom: 4px;
-    font-size: 13px;
-    color: #94a3b8;
-}
-.workflow-arrow {
-    text-align: center;
-    color: rgba(0,255,255,0.40);
-    font-size: 16px;
-    line-height: 1;
-    margin: 2px 0;
-}
-
-/* ── PULSE ANIMATION ── */
-@keyframes pulse-glow {
-    0%   { box-shadow: 0 0 15px rgba(0,255,255,0.08); }
-    50%  { box-shadow: 0 0 40px rgba(0,255,255,0.28); }
-    100% { box-shadow: 0 0 15px rgba(0,255,255,0.08); }
-}
-.glow { animation: pulse-glow 3s ease-in-out infinite; }
-
-@keyframes slide-in {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-.slide-in { animation: slide-in 0.4s ease forwards; }
-
-/* ── ALERT BOXES ── */
-.alert-box {
-    background: rgba(15,23,42,0.85);
-    border-radius: 16px;
-    padding: 18px 22px;
-    border-left: 4px solid #00ffff;
-    margin: 8px 0;
-    color: #e2e8f0;
-    font-size: 14px;
-    line-height: 1.6;
-}
-.sms-box {
-    background: rgba(15,23,42,0.70);
-    border-radius: 12px;
-    padding: 12px 16px;
-    border: 1px dashed rgba(99,102,241,0.40);
-    color: #a5b4fc;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-}
-
-/* ── NODEMCU STATUS ── */
-.iot-success {
-    background: rgba(34,197,94,0.08);
-    border: 1px solid rgba(34,197,94,0.25);
-    border-radius: 12px;
-    padding: 12px 16px;
-    color: #4ade80;
-    font-size: 13px;
-}
-.iot-warning {
-    background: rgba(234,179,8,0.08);
-    border: 1px solid rgba(234,179,8,0.25);
-    border-radius: 12px;
-    padding: 12px 16px;
-    color: #fbbf24;
-    font-size: 13px;
-}
-
-/* ── TABS ── */
-[data-baseweb="tab-list"] {
-    background: rgba(15,23,42,0.80);
-    border-radius: 16px;
-    padding: 4px;
-    border: 1px solid rgba(0,255,255,0.10);
-}
-[data-baseweb="tab"] {
-    border-radius: 12px !important;
-    color: #64748b !important;
-    font-weight: 600;
-}
-[aria-selected="true"] {
-    background: rgba(0,255,255,0.12) !important;
-    color: #00ffff !important;
-}
-
-/* ── DIVIDER ── */
-hr { border-color: rgba(0,255,255,0.08) !important; }
-
-/* ── STREAMLIT INFO / SUCCESS / ERROR ── */
-[data-testid="stAlert"] {
-    border-radius: 14px !important;
-}
-
-/* ── FOLIUM MAP ── */
-iframe[title="streamlit_folium.st_folium"] {
-    border-radius: 16px !important;
-    border: 1px solid rgba(0,255,255,0.15) !important;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.25) !important;
+.glow{
+    animation:pulse 3s infinite;
 }
 </style>
 """, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# HERO HEADER
-# ══════════════════════════════════════════════════════════════════════════════
+# =========================================================
+# GEMINI
+# =========================================================
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+# =========================================================
+# LOCATION-BASED ROUTE OVERRIDE
+# Determines route_id from the detected location string.
+# Runs after Gemini parse to ensure the correct Bengaluru
+# junction corridor is activated.
+#
+# Silk Board Junction          → Route A
+# BTM Layout Water Tank Jn.    → Route B
+# Jayadeva Junction            → Route C
+# =========================================================
+def determine_route_id_by_location(location: str) -> Optional[str]:
+    """
+    Derive route_id from the location field returned by Gemini.
+    Returns A, B, or C if a known Bengaluru junction is detected.
+    Returns None if the location does not match any known junction,
+    allowing the emergency-type fallback to take over.
+    Compatible with Python 3.8+.
+    """
+    loc = location.lower()
+    # Route A — Silk Board Junction variants
+    if any(x in loc for x in [
+        "silk board",
+        "silkboard",
+        "silk board junction"
+    ]):
+        return "A"
+    # Route B — BTM Layout Water Tank Junction variants
+    if any(x in loc for x in [
+        "btm",
+        "btm layout",
+        "water tank"
+    ]):
+        return "B"
+    # Route C — Jayadeva Junction variants
+    if any(x in loc for x in [
+        "jayadeva",
+        "jayadeva junction",
+        "jayadeva hospital"
+    ]):
+        return "C"
+    return None  # No location match — defer to emergency-type logic
+# =========================================================
+# EMERGENCY-TYPE ROUTE OVERRIDE
+# Determines route_id from emergency type keywords.
+# Used as the secondary fallback when location is not matched.
+# =========================================================
+def determine_route_id_by_type(emergency_type: str) -> str:
+    """
+    Derive the correct route_id from the emergency type string.
+    Route A (Silk Board Junction)               → Medical / Cardiac / Ambulance
+    Route B (BTM Layout Water Tank Junction)    → Road Accident / Collision / Crash
+    Route C (Jayadeva Junction)                 → Fire / Explosion / Building Fire
+    """
+    t = emergency_type.lower()
+    # Route C — Fire emergencies (check before generic keywords)
+    if any(k in t for k in ["fire", "explosion", "blast", "inferno", "burning"]):
+        return "C"
+    # Route B — Road accident / collision
+    if any(k in t for k in ["accident", "collision", "crash", "vehicular", "highway", "road"]):
+        return "B"
+    # Route A — Medical / cardiac / ambulance (default for medical)
+    if any(k in t for k in [
+        "cardiac", "heart", "medical", "ambulance",
+        "stroke", "trauma", "injury", "patient", "emergency"
+    ]):
+        return "A"
+    # Default fallback — treat unknown as medical (Silk Board Junction)
+    return "A"
+# =========================================================
+# COMBINED ROUTE RESOLVER
+# Location takes priority; emergency type is the fallback.
+# =========================================================
+def resolve_route_id(location: str, emergency_type: str) -> str:
+    """
+    Resolve final route_id using a two-step priority chain:
+    1. Location-based detection  (Silk Board / BTM / Jayadeva)
+    2. Emergency-type keywords   (cardiac / accident / fire)
+    """
+    route = determine_route_id_by_location(location)
+    if route:
+        return route
+    return determine_route_id_by_type(emergency_type)
+# =========================================================
+# FALLBACK
+# Returns a safe static response when all AI fails.
+# =========================================================
+def fallback_response() -> dict:
+    """Returns a hardcoded safe fallback response dict."""
+    return {
+        "severity": "Critical",
+        "type": "Cardiac Emergency",
+        "location": "Silk Board Junction",
+        "hospital": "Apollo Hospital",
+        "route": [
+            "Silk Board Junction",
+            "BTM Layout",
+            "Apollo Hospital"
+        ],
+        "route_id": "A",
+        "corridor_required": True,
+        "citizen_alert": "Emergency ambulance approaching Silk Board Junction. Please use alternate routes."
+    }
+# =========================================================
+# ANALYZE EMERGENCY
+# Primary AI function. Calls Gemini, parses response,
+# overrides route_id by location then type, falls back
+# gracefully on any error.
+# =========================================================
+def analyze_emergency(text: str) -> dict:
+    """
+    Analyze an emergency description using Gemini AI.
+    Steps:
+    1. Build structured prompt requesting JSON output.
+       Prompt includes Bengaluru junction → route_id mapping.
+    2. Call Gemini API.
+    3. Parse JSON response safely.
+    4. Override route_id using location-first, type-second logic.
+    5. Fall back to backup_analysis() or fallback_response() on failure.
+    """
+    prompt = f"""
+    You are Urban Guardian AI operating in Bengaluru, India.
+    Analyze the emergency and return ONLY valid JSON.
+    ROUTE ASSIGNMENT RULES — BENGALURU JUNCTIONS:
+    Emergencies near or involving Silk Board Junction:
+    → route_id = "A"
+    Emergencies near or involving BTM Layout / BTM Layout Water Tank Junction:
+    → route_id = "B"
+    Emergencies near or involving Jayadeva Junction / Jayadeva Hospital area:
+    → route_id = "C"
+    EMERGENCY TYPE FALLBACK (if no junction is matched):
+    1. Cardiac Emergency
+    2. Ambulance Emergency
+    3. Medical Emergency
+    → route_id = "A"  (Silk Board Junction corridor)
+    1. Road Accident
+    2. Vehicular Accident
+    3. Collision
+    4. Highway Crash
+    → route_id = "B"  (BTM Layout Water Tank Junction corridor)
+    1. Fire Emergency
+    2. Building Fire
+    3. Explosion
+    4. Fire Brigade Response
+    → route_id = "C"  (Jayadeva Junction corridor)
+    IMPORTANT:
+    - route_id MUST be exactly A, B, or C.
+    - Do not leave route_id empty.
+    - Prefer location-based route assignment over type-based.
+    - Choose the hospital closest to the emergency location.
+    - corridor_required should be true for critical emergencies.
+    - In the route array, use real Bengaluru junction names.
+    Return ONLY JSON in this format:
+    {{
+        "severity":"",
+        "type":"",
+        "location":"",
+        "hospital":"",
+        "route":[],
+        "route_id":"",
+        "corridor_required":true,
+        "citizen_alert":""
+    }}
+    Emergency Description:
+    {text}
+    """
+    # --- Attempt Gemini call ---
+    if GEMINI_API_KEY:
+        try:
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(prompt)
+            # Strip markdown fences if present
+            clean = (
+                response.text
+                .replace("```json", "")
+                .replace("```", "")
+                .strip()
+            )
+            # Parse JSON safely
+            try:
+                data = json.loads(clean)
+            except json.JSONDecodeError:
+                st.warning("⚠ Gemini returned invalid JSON. Using Backup AI.")
+                data = backup_analysis(text) or fallback_response()
+        except Exception as e:
+            # Covers quota errors, network issues, API failures
+            err_msg = str(e).lower()
+            if "quota" in err_msg or "rate" in err_msg:
+                st.warning("⚠ Gemini API quota exceeded. Using Backup AI.")
+            else:
+                st.warning("⚠ Gemini unavailable. Using Backup AI.")
+            data = backup_analysis(text) or fallback_response()
+    else:
+        # No API key configured — use backup immediately
+        st.warning("⚠ Gemini API key not set. Using Backup AI.")
+        data = backup_analysis(text) or fallback_response()
+    # --- Safety check: ensure data is a valid dict ---
+    if not isinstance(data, dict):
+        data = fallback_response()
+    # --- Ensure all required keys exist ---
+    required_keys = {
+        "severity": "Unknown",
+        "type": "Emergency",
+        "location": "Unknown",
+        "hospital": "Nearest Hospital",
+        "route": [],
+        "route_id": "A",
+        "corridor_required": True,
+        "citizen_alert": "Emergency in progress. Please clear the route."
+    }
+    for key, default in required_keys.items():
+        if key not in data or data[key] is None or data[key] == "":
+            data[key] = default
+    # --- Override route_id: location first, emergency type second ---
+    # This guarantees the correct Bengaluru junction corridor is activated
+    # regardless of what Gemini returned in the route_id field.
+    data["route_id"] = resolve_route_id(data["location"], data["type"])
+    return data
+# =========================================================
+# NODEMCU
+# =========================================================
+def activate_route_a():
+    """Activate Silk Board Junction emergency corridor."""
+    try:
+        r = requests.get(f"http://{NODEMCU_IP}/emergencyA", timeout=2)
+        return r.status_code == 200
+    except:
+        return False
+def activate_route_b():
+    """Activate BTM Layout Water Tank Junction emergency corridor."""
+    try:
+        r = requests.get(f"http://{NODEMCU_IP}/emergencyB", timeout=2)
+        return r.status_code == 200
+    except:
+        return False
+def activate_route_c():
+    """Activate Jayadeva Junction emergency corridor."""
+    try:
+        r = requests.get(f"http://{NODEMCU_IP}/emergencyC", timeout=2)
+        return r.status_code == 200
+    except:
+        return False
+def normal_mode():
+    try:
+        r = requests.get(f"http://{NODEMCU_IP}/normal", timeout=2)
+        return r.status_code == 200
+    except:
+        return False
+def get_status():
+    try:
+        r = requests.get(f"http://{NODEMCU_IP}/status", timeout=2)
+        return r.status_code == 200
+    except:
+        return False
+# =========================================================
+# HERO
+# =========================================================
 st.markdown("""
 <div class='hero glow'>
-    <div class='hero-badge'>⚡ Agentic AI · Smart City · IoT</div>
-    <div class='hero-title'>🚑 Urban Guardian AI</div>
-    <div class='hero-sub'>
-        Multi-Agent Emergency Response &amp; Smart Traffic Command Center · Bengaluru
-    </div>
+<div class='hero-title'>
+🚑 Urban Guardian AI
 </div>
-""", unsafe_allow_html=True)
-
+<div class='hero-sub'>
+Agentic Emergency Response & Smart Traffic Command Center
+</div>
+</div>
+""",
+unsafe_allow_html=True)
 st.write("")
-
-# ══════════════════════════════════════════════════════════════════════════════
+# =========================================================
 # TABS
-# ══════════════════════════════════════════════════════════════════════════════
+# =========================================================
 tab1, tab2, tab3 = st.tabs([
-    "🚨 Emergency Command",
-    "🗺️ Smart City Map",
-    "⚙️ Hardware Monitor",
+    "🚨 Emergency Dashboard",
+    "🗺 Smart City View",
+    "⚙ Hardware Monitoring"
 ])
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 1 — EMERGENCY COMMAND
-# ══════════════════════════════════════════════════════════════════════════════
+# =========================================================
+# TAB 1
+# =========================================================
 with tab1:
-
-    # ── Input Section ─────────────────────────────────────────────────────────
-    col_input, col_arch = st.columns([3, 1], gap="large")
-
-    with col_input:
-        st.markdown("#### 🚨 Emergency Input")
-        emergency = st.text_area(
-            label="emergency_input",
-            label_visibility="collapsed",
-            height=160,
-            placeholder=(
-                "Describe the emergency in natural language...\n\n"
-                "Example: Critical cardiac patient near Silk Board Junction. "
-                "Heavy traffic congestion on Hosur Road. Ambulance needed immediately."
-            ),
-            key="emergency_text_area",
+    emergency = st.text_area(
+        "🚨 Describe Emergency",
+        height=160,
+        placeholder="Critical cardiac patient near Silk Board Junction. Heavy traffic congestion..."
+    )
+    analyze = st.button(
+        "Analyze Emergency"
+    )
+    if analyze:
+        with st.spinner(
+            "🤖 AI Agents Coordinating..."
+        ):
+            data = analyze_emergency(emergency)
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(
+            "Severity",
+            data["severity"]
         )
-        analyze_btn = st.button("🤖 Activate Agent Workflow", key="analyze_btn")
-
-    with col_arch:
-        st.markdown("#### 🔄 Agent Workflow")
-        st.markdown("""
-<div style='font-size:12px;'>
-<div class='workflow-step'>👤 <b>User Input</b></div>
-<div class='workflow-arrow'>↓</div>
-<div class='workflow-step'>🧩 <b>Orchestrator Agent</b></div>
-<div class='workflow-arrow'>↓</div>
-<div class='workflow-step'>🧠 <b>Emergency Agent</b> <span class='gemini-badge'>GEMINI ×1</span></div>
-<div class='workflow-arrow'>↓</div>
-<div class='workflow-step'>🏥 <b>Hospital Agent</b> <span class='ai-rule-badge'>RULE</span></div>
-<div class='workflow-arrow'>↓</div>
-<div class='workflow-step'>🚦 <b>Traffic Agent</b> <span class='ai-rule-badge'>RULE</span></div>
-<div class='workflow-arrow'>↓</div>
-<div class='workflow-step'>📢 <b>Citizen Agent</b> <span class='ai-rule-badge'>TMPL</span></div>
-<div class='workflow-arrow'>↓</div>
-<div class='workflow-step'>📡 <b>NodeMCU IoT</b></div>
-</div>
-""", unsafe_allow_html=True)
-
-    # ── Analysis Results ───────────────────────────────────────────────────────
-    if analyze_btn:
-        if not emergency.strip():
-            st.warning("⚠️ Please describe the emergency before activating the agent workflow.")
+        c2.metric(
+            "Location",
+            data["location"]
+        )
+        c3.metric(
+            "Hospital",
+            data["hospital"]
+        )
+        c4.metric(
+            "Corridor",
+            "ACTIVE"
+            if data["corridor_required"]
+            else "OFF"
+        )
+        st.divider()
+        left, right = st.columns([2, 1])
+        with left:
+            st.subheader("🧠 AI Analysis")
+            st.info(
+                f"Emergency Type: {data['type']}"
+            )
+            st.success(
+                f"Recommended Hospital: {data['hospital']}"
+            )
+            # Show junction name alongside route waypoints
+            route_id = data.get("route_id", "A")
+            junction_name = ROUTE_JUNCTION.get(route_id, f"Route {route_id}")
+            st.write(
+                f"**Active Junction:** {junction_name}"
+            )
+            st.write(
+                f"Route: {' ➜ '.join(data['route'])}"
+            )
+        with right:
+            st.subheader("🤖 Agents")
+            st.success("Emergency Agent")
+            st.success("Hospital Agent")
+            st.success("Traffic Agent")
+            st.success("Citizen Alert Agent")
+        st.divider()
+        st.subheader("🚦 Traffic Control")
+        if data["corridor_required"]:
+            route_id = data.get("route_id", "A")
+            junction_name = ROUTE_JUNCTION.get(route_id, f"Route {route_id}")
+            if route_id == "A":
+                success = activate_route_a()
+            elif route_id == "B":
+                success = activate_route_b()
+            elif route_id == "C":
+                success = activate_route_c()
+            else:
+                success = False
+            if success:
+                st.success(
+                    f"🚦 Emergency Corridor Activated — {junction_name} (Route {route_id})"
+                )
+            else:
+                st.error(
+                    "❌ Failed to communicate with NodeMCU"
+                )
         else:
-            # ── Run Orchestrator ───────────────────────────────────────────────
-            with st.spinner("🤖 Orchestrating AI Agents..."):
-                orchestrator = OrchestratorAgent()
-                result = orchestrator.run(emergency)
-
-            final   = result["final_data"]
-            a_status= result["agent_status"]
-            logs    = result["execution_logs"]
-            total_ms= result["total_elapsed_ms"]
-
-            st.markdown("---")
-
-            # ── Row 1: Agent Status Panel + Key Metrics ────────────────────────
-            panel_col, metrics_col = st.columns([1, 2], gap="large")
-
-            with panel_col:
-                st.markdown("#### ⚡ Agent Execution Status")
-                st.write("")
-
-                agent_order = [
-                    ("Orchestrator Agent",          "🧩", "COORD"),
-                    ("Emergency Assessment Agent",  "🧠", "GEMINI"),
-                    ("Hospital Coordination Agent", "🏥", "RULE"),
-                    ("Traffic Optimization Agent",  "🚦", "RULE"),
-                    ("Citizen Alert Agent",         "📢", "TMPL"),
-                ]
-                log_map = {l["agent"]: l for l in logs}
-
-                with st.container():
-                    for (name, icon, kind) in agent_order:
-                        # Extract agent data
-                        status = a_status.get(name, "⏳ Pending")
-                        log    = log_map.get(name, {})
-                        ms     = log.get("elapsed_ms", 0)
-
-                        # Create columns for clean alignment
-                        c1, c2, c3 = st.columns([6, 3, 2])
-                        
-                        with c1:
-                            st.markdown(f"**{icon} {name}**")
-                        
-                        with c2:
-                            if "✅" in status:
-                                st.markdown("✅ **Success**")
-                            elif "❌" in status:
-                                st.markdown("❌ **Failed**")
-                            else:
-                                st.markdown("🟡 **Running**")
-                        
-                        with c3:
-                            st.code(f"{ms} ms" if ms else "0 ms")
-
-                st.markdown("---")
-                
-                # Footer row for Gemini indicator + total time
-                gemini_note = "🔮 Gemini AI used" if final.get("gemini_used") else "🔁 Local fallback"
-                c_foot1, c_foot2 = st.columns(2)
-                c_foot1.info(gemini_note)
-                c_foot2.info(f"Total: {total_ms} ms")
-
-            with metrics_col:
-                # Severity color
-                sev = final["severity"]
-                sev_color = {
-                    "Critical": "#f87171",
-                    "High":     "#fb923c",
-                    "Medium":   "#fbbf24",
-                    "Low":      "#4ade80",
-                }.get(sev, "#94a3b8")
-
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("🔴 Severity",    final["severity"])
-                m2.metric("📍 Location",    final["location"])
-                m3.metric("🏥 Hospital",    final["hospital"])
-                m4.metric("🚦 Corridor",
-                          "ACTIVE" if final["corridor_required"] else "OFF")
-
-                st.write("")
-                m5, m6, m7, m8 = st.columns(4)
-                m5.metric("🚑 ETA",         f"{final['eta_minutes']} min")
-                m6.metric("🗺️ Route",       f"Route {final['route_id']}")
-                m7.metric("🏙️ Junction",    final["junction"])
-                # NodeMCU metric: Triggered / Waiting / Error
-                status_lower = final["nodemcu_status"].lower()
-                if final["nodemcu_triggered"]:
-                    nodemcu_label = "🟢 NodeMCU Online"
-                elif "error" in status_lower or "failed" in status_lower or "offline" in status_lower or "unreachable" in status_lower:
-                    nodemcu_label = "🔴 Comm Error"
-                else:
-                    nodemcu_label = "🟡 Waiting..."
-                m8.metric("📡 NodeMCU", nodemcu_label)
-
-            st.markdown("---")
-
-            # ── Row 2: AI Analysis + Traffic Control ───────────────────────────
-            left, right = st.columns([3, 2], gap="large")
-
-            with left:
-                st.markdown("#### 🧠 AI Analysis")
-
-                severity_html = f"<span style='color:{sev_color}; font-weight:700;'>{sev}</span>"
-                st.markdown(f"""
-                <div class='glass slide-in' style='margin-bottom:12px;'>
-                    <table style='width:100%; border-collapse:collapse;'>
-                        <tr>
-                            <td style='color:#64748b; font-size:13px; padding:8px 0; width:40%;'>
-                                🔴 Severity
-                            </td>
-                            <td style='color:#e2e8f0; font-size:14px; font-weight:600;'>
-                                {severity_html}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style='color:#64748b; font-size:13px; padding:8px 0;'>
-                                🚨 Emergency Type
-                            </td>
-                            <td style='color:#e2e8f0; font-size:14px; font-weight:600;'>
-                                {final["type"]}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style='color:#64748b; font-size:13px; padding:8px 0;'>
-                                📍 Location
-                            </td>
-                            <td style='color:#e2e8f0; font-size:14px; font-weight:600;'>
-                                {final["location"]}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style='color:#64748b; font-size:13px; padding:8px 0;'>
-                                🏥 Recommended Hospital
-                            </td>
-                            <td style='color:#4ade80; font-size:14px; font-weight:600;'>
-                                {final["hospital"]}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style='color:#64748b; font-size:13px; padding:8px 0;'>
-                                📞 Hospital Contact
-                            </td>
-                            <td style='color:#a5b4fc; font-size:14px; font-weight:600;'>
-                                {final["hospital_contact"]}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td style='color:#64748b; font-size:13px; padding:8px 0;'>
-                                🗺️ Active Corridor
-                            </td>
-                            <td style='color:#00ffff; font-size:14px; font-weight:600;'>
-                                Route {final["route_id"]} — {final["junction"]}
-                            </td>
-                        </tr>
-                    </table>
-                </div>
-                """, unsafe_allow_html=True)
-
-                if final["route"]:
-                    route_str = " ➜ ".join(final["route"])
-                    st.markdown(f"""
-                    <div style='background:rgba(0,255,255,0.04); border:1px solid rgba(0,255,255,0.15);
-                                border-radius:12px; padding:12px 16px; margin-top:4px;'>
-                        <span style='color:#64748b; font-size:12px; font-weight:600;
-                                     text-transform:uppercase; letter-spacing:1px;'>
-                            🛣️ Route Waypoints
-                        </span><br/>
-                        <span style='color:#e2e8f0; font-size:13px; line-height:2;'>
-                            {route_str}
-                        </span>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            with right:
-                st.markdown("#### 🚦 Traffic Control")
-
-                # ── NodeMCU Status (native Streamlit) ────────────
-                status_lower = final["nodemcu_status"].lower()
-                if final["nodemcu_triggered"]:
-                    st.success(f"**🟢 NodeMCU Online**\n\n{final['nodemcu_status']}")
-                elif "error" in status_lower or "failed" in status_lower or "offline" in status_lower or "unreachable" in status_lower:
-                    st.error(f"**🔴 NodeMCU Communication Error**\n\n{final['nodemcu_status']}")
-                else:
-                    st.warning(f"**🟡 Waiting for NodeMCU Connection**\n\nHardware not connected — set NODEMCU_IP in .env to enable IoT control.")
-
-                if final["corridor_required"]:
-                    st.success(
-                        f"🚦 Emergency Corridor ACTIVE\n\n"
-                        f"**{final['junction']}** · Route {final['route_id']}"
-                    )
-                else:
-                    st.info("🟢 Normal Traffic Mode — No corridor required.")
-
-                st.write("")
-                st.markdown("#### 📢 Citizen Alert")
-                st.markdown(f"""
-                <div class='alert-box'>
-                    {final["citizen_alert"]}
-                </div>
-                """, unsafe_allow_html=True)
-
-                if final.get("sms_alert"):
-                    st.markdown(f"""
-                    <div class='sms-box' style='margin-top:8px;'>
-                        📱 SMS: {final["sms_alert"]}
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                if final.get("broadcast_zones"):
-                    zones = ", ".join(final["broadcast_zones"])
-                    st.markdown(f"""
-                    <div style='margin-top:8px; font-size:11px; color:#475569;'>
-                        📡 Broadcast zones: {zones}
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                if final.get("timestamp"):
-                    st.markdown(f"""
-                    <div style='margin-top:4px; font-size:11px; color:#334155;
-                                font-family: JetBrains Mono, monospace;'>
-                        🕐 {final["timestamp"]}
-                    </div>
-                    """, unsafe_allow_html=True)
-
-    # ── Impact Metrics (always visible) ───────────────────────────────────────
-    st.markdown("---")
-    st.markdown("#### 📊 System Impact Metrics")
-    ic1, ic2, ic3, ic4 = st.columns(4)
-    ic1.metric("⏱️ Response Time Saved", "6 min",  delta="vs manual dispatch")
-    ic2.metric("🚗 Traffic Delay Reduced", "32%",  delta="corridor efficiency")
-    ic3.metric("🎯 Emergency Priority",   "HIGH",  delta="real-time routing")
-    ic4.metric("📏 Corridor Length",      "4.2 km", delta="optimized path")
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 2 — SMART CITY MAP
-# ══════════════════════════════════════════════════════════════════════════════
+            normal_mode()
+            st.info("Normal Traffic Mode")
+        st.divider()
+        st.subheader("📢 Citizen Alert")
+        st.warning(data["citizen_alert"])
+# =========================================================
+# TAB 2
+# =========================================================
 with tab2:
-    st.markdown("#### 🗺️ Smart City Route Visualization — Bengaluru")
-
-    # Map controls
-    map_col, legend_col = st.columns([3, 1], gap="large")
-
-    with legend_col:
-        st.markdown("#### 🗺️ Map Legend")
-        st.markdown("""
-        <div style='font-size:13px; line-height:2.2; color:#94a3b8;'>
-            🚑 &nbsp;<b style='color:#e2e8f0;'>Ambulance</b><br/>
-            🟢 &nbsp;<b style='color:#4ade80;'>Route A — Silk Board</b><br/>
-            🔵 &nbsp;<b style='color:#60a5fa;'>Route B — BTM Layout</b><br/>
-            🔴 &nbsp;<b style='color:#f87171;'>Route C — Jayadeva</b><br/>
-            🏥 &nbsp;<b style='color:#e2e8f0;'>Hospitals</b><br/>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown("""
-        <div style='font-size:12px; color:#475569;'>
-            🔗 Three emergency corridors cover major Bengaluru junctions.<br/><br/>
-            Each route is controlled by a dedicated NodeMCU traffic signal node.
-        </div>
-        """, unsafe_allow_html=True)
-
-    with map_col:
-        m = folium.Map(
-            location=[12.9150, 77.6100],
-            zoom_start=13,
-            tiles="CartoDB positron",
-        )
-
-        # Ambulance origin marker
-        folium.Marker(
+    st.subheader("🗺 Smart City Route Visualization")
+    m = folium.Map(
+        location=[12.9279, 77.6271],
+        zoom_start=12
+    )
+    folium.Marker(
+        [12.9279, 77.6271],
+        popup="🚑 Ambulance"
+    ).add_to(m)
+    folium.Marker(
+        [12.8945, 77.5970],
+        popup="🏥 Apollo Hospital"
+    ).add_to(m)
+    # Route A — Silk Board Junction marker
+    folium.Marker(
+        [12.9170, 77.6231],
+        popup="🟢 Silk Board Junction (Route A)",
+        icon=folium.Icon(color="green", icon="info-sign")
+    ).add_to(m)
+    # Route B — BTM Layout Water Tank Junction marker
+    folium.Marker(
+        [12.9116, 77.6100],
+        popup="🔵 BTM Layout Water Tank Junction (Route B)",
+        icon=folium.Icon(color="blue", icon="info-sign")
+    ).add_to(m)
+    # Route C — Jayadeva Junction marker
+    folium.Marker(
+        [12.9200, 77.5980],
+        popup="🔴 Jayadeva Junction (Route C)",
+        icon=folium.Icon(color="red", icon="info-sign")
+    ).add_to(m)
+    folium.PolyLine(
+        [
             [12.9279, 77.6271],
-            popup=folium.Popup("🚑 Ambulance Origin", max_width=200),
-            tooltip="🚑 Ambulance",
-            icon=folium.Icon(color="red", icon="ambulance", prefix="fa"),
-        ).add_to(m)
-
-        # Junction markers
-        junction_data = {
-            "A": {"coords": [12.9170, 77.6231], "color": "green",
-                  "popup": "🟢 Silk Board Junction (Route A) — NodeMCU #1"},
-            "B": {"coords": [12.9116, 77.6100], "color": "blue",
-                  "popup": "🔵 BTM Layout Water Tank Junction (Route B) — NodeMCU #2"},
-            "C": {"coords": [12.9200, 77.5980], "color": "red",
-                  "popup": "🔴 Jayadeva Junction (Route C) — NodeMCU #3"},
-        }
-        for route_id, info in junction_data.items():
-            folium.Marker(
-                info["coords"],
-                popup=folium.Popup(info["popup"], max_width=220),
-                tooltip=f"Route {route_id} Junction",
-                icon=folium.Icon(color=info["color"], icon="traffic-light", prefix="fa"),
-            ).add_to(m)
-
-        # Hospital markers
-        for hosp_name, coords in HOSPITAL_COORDS.items():
-            folium.Marker(
-                coords,
-                popup=folium.Popup(f"🏥 {hosp_name}", max_width=200),
-                tooltip=f"🏥 {hosp_name}",
-                icon=folium.Icon(color="purple", icon="plus-sign"),
-            ).add_to(m)
-
-        # Emergency corridor routes
-        route_lines = {
-            "A": {
-                "points": [[12.9279, 77.6271], [12.9170, 77.6231], [12.8945, 77.5970]],
-                "color": "#00ff88",
-            },
-            "B": {
-                "points": [[12.9279, 77.6271], [12.9116, 77.6100], [12.8600, 77.5800]],
-                "color": "#38bdf8",
-            },
-            "C": {
-                "points": [[12.9279, 77.6271], [12.9200, 77.5980], [12.9204, 77.5973]],
-                "color": "#f87171",
-            },
-        }
-        for route_id, line in route_lines.items():
-            folium.PolyLine(
-                line["points"],
-                color=line["color"],
-                weight=4,
-                opacity=0.75,
-                tooltip=f"Emergency Corridor Route {route_id}",
-                dash_array="8 4",
-            ).add_to(m)
-
-        st_folium(m, width=900, height=520, returned_objects=[])
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 3 — HARDWARE MONITOR
-# ══════════════════════════════════════════════════════════════════════════════
+            [12.8945, 77.5970]
+        ],
+        color="lime",
+        weight=8
+    ).add_to(m)
+    st_folium(m, width=1200, height=500)
+# =========================================================
+# TAB 3
+# =========================================================
 with tab3:
-    st.markdown("#### ⚙️ NodeMCU ESP8266 Hardware Monitor")
-
+    st.subheader("⚙ Hardware Monitoring")
     online = get_status()
-
-    hw1, hw2, hw3 = st.columns(3)
-    hw1.metric("📡 NodeMCU",        "ONLINE"   if online else "OFFLINE")
-    hw2.metric("🚦 Traffic Corridor", "READY")
-    hw3.metric("🔴 Emergency Mode",  "STANDBY")
-
-    if online:
-        st.success("🟢 NodeMCU Connected — ESP8266 hardware link established.")
-    else:
-        st.warning(
-            "🟡 NodeMCU Offline — Set `NODEMCU_IP` in your `.env` file. "
-            "Agent workflow still fully functional without hardware."
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            "NodeMCU",
+            "ONLINE" if online else "OFFLINE"
         )
-
-    st.markdown("---")
-    st.markdown("#### 🚦 Manual Traffic Corridor Control — Bengaluru Junctions")
-
-    mc1, mc2, mc3, mc4 = st.columns(4)
-
-    with mc1:
-        if st.button("🟢 Silk Board Jn. (A)", key="manual_a"):
-            if activate_route_a():
-                st.success("✅ Silk Board Junction Corridor Activated")
-            else:
-                st.error("❌ NodeMCU Unreachable")
-
-    with mc2:
-        if st.button("🔵 BTM Layout Jn. (B)", key="manual_b"):
-            if activate_route_b():
-                st.success("✅ BTM Layout Junction Corridor Activated")
-            else:
-                st.error("❌ NodeMCU Unreachable")
-
-    with mc3:
-        if st.button("🔴 Jayadeva Jn. (C)", key="manual_c"):
-            if activate_route_c():
-                st.success("✅ Jayadeva Junction Corridor Activated")
-            else:
-                st.error("❌ NodeMCU Unreachable")
-
-    with mc4:
-        if st.button("🔄 Normal Mode", key="manual_normal"):
-            if normal_mode():
-                st.info("🔄 Normal Traffic Mode Activated")
-            else:
-                st.error("❌ NodeMCU Unreachable")
-
-    st.markdown("---")
-    st.markdown("#### 🏗️ System Architecture")
-    st.markdown("""
-    <div class='glass'>
-    <table style='width:100%; border-collapse:collapse; font-size:13px;'>
-        <thead>
-            <tr>
-                <th style='color:#00ffff; padding:10px; text-align:left; border-bottom:1px solid rgba(0,255,255,0.15);'>Agent</th>
-                <th style='color:#00ffff; padding:10px; text-align:left; border-bottom:1px solid rgba(0,255,255,0.15);'>Type</th>
-                <th style='color:#00ffff; padding:10px; text-align:left; border-bottom:1px solid rgba(0,255,255,0.15);'>Gemini</th>
-                <th style='color:#00ffff; padding:10px; text-align:left; border-bottom:1px solid rgba(0,255,255,0.15);'>Responsibility</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td style='color:#e2e8f0; padding:10px;'>🧩 Orchestrator</td>
-                <td style='color:#94a3b8; padding:10px;'>Coordinator</td>
-                <td style='color:#f87171; padding:10px;'>❌ No</td>
-                <td style='color:#94a3b8; padding:10px;'>Sequences all agents, passes JSON, aggregates output</td>
-            </tr>
-            <tr style='background:rgba(0,255,255,0.02);'>
-                <td style='color:#e2e8f0; padding:10px;'>🧠 Emergency Agent</td>
-                <td style='color:#94a3b8; padding:10px;'>Generative AI</td>
-                <td style='color:#4ade80; padding:10px;'>✅ Yes (×1)</td>
-                <td style='color:#94a3b8; padding:10px;'>NLP understanding → severity, type, location JSON</td>
-            </tr>
-            <tr>
-                <td style='color:#e2e8f0; padding:10px;'>🏥 Hospital Agent</td>
-                <td style='color:#94a3b8; padding:10px;'>Rule-Based</td>
-                <td style='color:#f87171; padding:10px;'>❌ No</td>
-                <td style='color:#94a3b8; padding:10px;'>Location + type → nearest hospital mapping</td>
-            </tr>
-            <tr style='background:rgba(0,255,255,0.02);'>
-                <td style='color:#e2e8f0; padding:10px;'>🚦 Traffic Agent</td>
-                <td style='color:#94a3b8; padding:10px;'>Decision + IoT</td>
-                <td style='color:#f87171; padding:10px;'>❌ No</td>
-                <td style='color:#94a3b8; padding:10px;'>Route A/B/C selection + NodeMCU HTTP trigger</td>
-            </tr>
-            <tr>
-                <td style='color:#e2e8f0; padding:10px;'>📢 Citizen Agent</td>
-                <td style='color:#94a3b8; padding:10px;'>Template</td>
-                <td style='color:#f87171; padding:10px;'>❌ No</td>
-                <td style='color:#94a3b8; padding:10px;'>Structured alert + SMS + broadcast zones</td>
-            </tr>
-        </tbody>
-    </table>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
+    with col2:
+        st.metric("Traffic Corridor", "READY")
+    with col3:
+        st.metric("Emergency Mode", "STANDBY")
+    if online:
+        st.success("🟢 NodeMCU Connected Successfully")
+        st.divider()
+        st.subheader("🚦 Manual Traffic Control — Bengaluru Junctions")
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            if st.button("🚦 Silk Board Junction (A)"):
+                if activate_route_a():
+                    st.success("🚦 Silk Board Junction Corridor Activated")
+                else:
+                    st.error("❌ NodeMCU Communication Failed")
+        with c2:
+            if st.button("🚦 BTM Layout Water Tank Jn. (B)"):
+                if activate_route_b():
+                    st.success("🚦 BTM Layout Water Tank Junction Corridor Activated")
+                else:
+                    st.error("❌ NodeMCU Communication Failed")
+        with c3:
+            if st.button("🚦 Jayadeva Junction (C)"):
+                if activate_route_c():
+                    st.success("🚦 Jayadeva Junction Corridor Activated")
+                else:
+                    st.error("❌ NodeMCU Communication Failed")
+        with c4:
+            if st.button("🔄 Normal"):
+                if normal_mode():
+                    st.info("🔄 Normal Mode Activated")
+                else:
+                    st.error("❌ NodeMCU Communication Failed")
+    else:
+        st.warning("🟡 NodeMCU Not Reachable")
+# =========================================================
 # FOOTER
-# ══════════════════════════════════════════════════════════════════════════════
-st.markdown("---")
-st.markdown("""
-<div style='text-align:center; padding:16px; color:#334155; font-size:12px;'>
-    <span style='color:#00ffff; font-weight:700;'>Urban Guardian AI</span> &nbsp;·&nbsp;
-    Powered by <b>Gemini 2.5 Flash</b> &nbsp;·&nbsp;
-    <b>Multi-Agent Agentic AI</b> &nbsp;·&nbsp;
-    <b>ESP8266 NodeMCU</b> &nbsp;·&nbsp;
-    <b>Bengaluru Smart City</b>
-    <br/><span style='color:#1e293b;'>Gemini called exactly once per request · All other agents are rule-based</span>
-</div>
-""", unsafe_allow_html=True)
+# =========================================================
+st.divider()
+st.caption(
+    "Powered by Gemini • Agentic AI • ESP8266 • Urban Guardian AI"
+)
+st.subheader("📊 Impact Metrics")
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Response Time Saved", "6 min")
+c2.metric("Traffic Delay Reduced", "32%")
+c3.metric("Emergency Priority", "HIGH")
+c4.metric("Corridor Length", "4.2 km")
